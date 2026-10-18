@@ -5,7 +5,7 @@ This is Madeira (willfaust/madeira `main` at `279fd0f`) plus fixes that get **Re
 ## Install
 
 - Download `Madeira-279fd0f-dockscm-unsigned.ipa` below. It is **unsigned**: sideload it the same way as an official Madeira IPA.
-- Use **install IPA**, not refresh. The build label in Madeira should read `upstream-279fd0f 8efe633`.
+- Use **install IPA**, not refresh. The build label in Madeira should read `upstream-279fd0f 2974d5f`.
 - You need to own RDR2 on Steam. No extra config is needed: Madeira's recommended settings for the RDR2 Steam entry already cover it.
 
 ## What's changed
@@ -21,4 +21,4 @@ On one iPhone: in game for over 6 minutes, about 25–30 fps, no crash. The emul
 
 ## Source
 
-GPL-3.0-or-later. The source for this build is the `rdr2-dock-scm-build` branch of this repository at `8efe633`, with its submodules.
+GPL-3.0-or-later. The source for this build is the `rdr2-dock-scm-build` branch of this repository at `2974d5f`, with its submodules.

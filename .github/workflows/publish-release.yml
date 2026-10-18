@@ -14,9 +14,9 @@ jobs:
     timeout-minutes: 180
     env:
       GH_TOKEN: ${{ github.token }}
-      BUILD_RUN: '39170135351'
-      SOURCE_SHA: 8efe63393cd195f7577088baa66ec44dab7e70b3
-      TAG: rdr2-test-8efe633
+      BUILD_RUN: '39172131458'
+      SOURCE_SHA: 2974d5f5257b26a8df04803b092fd50099f09a60
+      TAG: rdr2-test-2974d5f
     steps:
       - uses: actions/checkout@v7.0.1
       - name: Wait for the IPA build to finish
