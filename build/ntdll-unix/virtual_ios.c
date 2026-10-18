@@ -19274,43 +19274,6 @@ failed:
     return status;
 }
 
-/* madeira-bcd: [stack-spill] a 4 GB floor constrains nothing on iOS.
- *
- * init_thread_stack asks for every thread's kernel stack (1 MB), CHPE emulator
- * stack and WoW64 64-bit stack with limit_low = limit_4g, as upstream does to
- * keep them out of the low 4 GB. Nothing is ever mapped below 4 GB here (the
- * __PAGEZERO), but virtual_set_large_address_space resets address_space_start
- * to 0x10000 for a 64-bit program, so map_view's "limit_low at or below
- * address_space_start" test (ml119) never matches these requests. They scan
- * the low map from 4 GB on every thread creation (~260-300 refused tries each,
- * the [va-scan] SLOW lines) and, once the furniture band is full, fail with
- * STATUS_NO_MEMORY instead of taking the relax valve. RDR2 (build 460, log
- * 2026-10-08 23:59:11) froze that way four minutes into the story: RDR2.exe's
- * main thread retried CreateThread, every try ended in [va-scan] FAILED
- * window=0x100000000..0x73ffff0000 size=0x100000 and "[thr-create] FAILED at
- * kernel stack", while 1838 MB above the JIT pool's RW alias were free.
- * MADEIRA_THREAD_STACK_SPILL=1 treats a limit_low at or below 4 GB as absent:
- * the scan starts at the furniture floor, and a full band falls back to the
- * kernel's pick like any other relaxable request. Off by default. */
-static int ios_stack_spill_enabled(void)
-{
-    static int enabled = -1;
-    int v = __atomic_load_n( &enabled, __ATOMIC_ACQUIRE );
-
-    if (v < 0)
-    {
-        const char *s = getenv( "MADEIRA_THREAD_STACK_SPILL" );
-
-        v = s && s[0] == '1' && !s[1];
-        __atomic_store_n( &enabled, v, __ATOMIC_RELEASE );
-        if (v)
-            dprintf( 2, "[stack-spill] MADEIRA_THREAD_STACK_SPILL=1: requests bounded only by a 4 GB floor "
-                        "(thread kernel, emulator and WoW64 stacks) start at the furniture floor and use the "
-                        "kernel's pick when the band is full\n" );
-    }
-    return v;
-}
-
 /* madeira-bcd: [arena-guard] a fixed or hinted guest reservation never lands
  * in the FEX arena.
  *
@@ -19347,6 +19310,7 @@ static int ios_arena_guard_enabled(void)
 
     if (v < 0)
     {
+        /* On by default. MADEIRA_ARENA_GUARD=0 lets a fixed or hinted guest reservation take FEX arena space again. */
         const char *e = getenv( "MADEIRA_ARENA_GUARD" );
 
         v = !(e && e[0] == '0');
@@ -19408,6 +19372,43 @@ static int ios_steer_top_slot_usable(void)
                     "reverts)\n", (unsigned long)ios_steer_slot, host_addr_space_limit,
                  (unsigned long)ios_fex_arena_base_unix, (unsigned long)ios_fex_arena_end_unix );
     return 0;
+}
+
+/* madeira-bcd: [stack-spill] a 4 GB floor constrains nothing on iOS.
+ *
+ * init_thread_stack asks for every thread's kernel stack (1 MB), CHPE emulator
+ * stack and WoW64 64-bit stack with limit_low = limit_4g, as upstream does to
+ * keep them out of the low 4 GB. Nothing is ever mapped below 4 GB here (the
+ * __PAGEZERO), but virtual_set_large_address_space resets address_space_start
+ * to 0x10000 for a 64-bit program, so map_view's "limit_low at or below
+ * address_space_start" test (ml119) never matches these requests. They scan
+ * the low map from 4 GB on every thread creation (~260-300 refused tries each,
+ * the [va-scan] SLOW lines) and, once the furniture band is full, fail with
+ * STATUS_NO_MEMORY instead of taking the relax valve. RDR2 (build 460, log
+ * 2026-10-08 23:59:11) froze that way four minutes into the story: RDR2.exe's
+ * main thread retried CreateThread, every try ended in [va-scan] FAILED
+ * window=0x100000000..0x73ffff0000 size=0x100000 and "[thr-create] FAILED at
+ * kernel stack", while 1838 MB above the JIT pool's RW alias were free.
+ * MADEIRA_THREAD_STACK_SPILL=1 treats a limit_low at or below 4 GB as absent:
+ * the scan starts at the furniture floor, and a full band falls back to the
+ * kernel's pick like any other relaxable request. Off by default. */
+static int ios_stack_spill_enabled(void)
+{
+    static int enabled = -1;
+    int v = __atomic_load_n( &enabled, __ATOMIC_ACQUIRE );
+
+    if (v < 0)
+    {
+        const char *s = getenv( "MADEIRA_THREAD_STACK_SPILL" );
+
+        v = s && s[0] == '1' && !s[1];
+        __atomic_store_n( &enabled, v, __ATOMIC_RELEASE );
+        if (v)
+            dprintf( 2, "[stack-spill] MADEIRA_THREAD_STACK_SPILL=1: requests bounded only by a 4 GB floor "
+                        "(thread kernel, emulator and WoW64 stacks) start at the furniture floor and use the "
+                        "kernel's pick when the band is full\n" );
+    }
+    return v;
 }
 
 /***********************************************************************
