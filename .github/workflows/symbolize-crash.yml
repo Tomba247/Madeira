@@ -1,0 +1,29 @@
+name: Symbolize the launcher cloud-save crash
+
+on:
+  push:
+    branches: [symbolize-crash]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  symbolize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: Madeira-279fd0f-dockscm-unsigned
+          run-id: '39135545690'
+          github-token: ${{ github.token }}
+          path: dist
+      - name: Disassemble Madeira.debug.dylib around +0xac3b5c
+        run: |
+          set -x
+          unzip -q dist/Madeira-279fd0f-dockscm-unsigned.ipa 'Payload/Madeira.app/Madeira.debug.dylib'
+          D=Payload/Madeira.app/Madeira.debug.dylib
+          OBJDUMP=$(ls /usr/bin/llvm-objdump* | sort -V | tail -1); NM=$(ls /usr/bin/llvm-nm* | sort -V | tail -1)
+          "$OBJDUMP" --macho --private-headers "$D" | grep -A6 -m1 'segname __TEXT'
+          "$NM" -n --defined-only "$D" | awk '{ if (strtonum("0x"$1) <= 0xac3b5c) last=$0; else { print "contains: " last; print "next:     " $0; exit } }'
+          "$OBJDUMP" -d --no-show-raw-insn --start-address=0xac3a40 --stop-address=0xac3c00 "$D" | head -120
