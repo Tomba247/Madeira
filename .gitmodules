@@ -12,5 +12,5 @@
 	branch = ios-port
 [submodule "madeira-dock"]
 	path = madeira-dock
-	url = https://github.com/willfaust/madeira-dock.git
-	branch = main
+	url = https://github.com/bahacan16/madeira-dock.git
+	branch = pr/dock-game-scm-keep-alive

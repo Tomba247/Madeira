@@ -1,8 +1,8 @@
-name: Current upstream Madeira IPA
+name: Current upstream Madeira IPA with Dock game-scm
 
 on:
   push:
-    branches: [codex/upstream-279fd0f-build]
+    branches: [rdr2-dock-scm-build]
   workflow_dispatch:
 
 permissions:
@@ -38,7 +38,7 @@ jobs:
           name: microsoft-vcruntime
           path: ${{ runner.temp }}/x86_64-vcruntime/*.dll
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
   regression:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -94,7 +94,7 @@ jobs:
       - name: Build and stage the updated Dock
         run: bash build/madeira-dock/build.sh --check
         env:
-          MADEIRA_DOCK_SOURCE_URL: https://github.com/willfaust/madeira-dock
+          MADEIRA_DOCK_SOURCE_URL: https://github.com/bahacan16/madeira-dock
       - name: Python prerequisites for FEX generators
         run: |
           python3 -m venv "$RUNNER_TEMP/fex-python"
@@ -195,15 +195,15 @@ jobs:
           PY
           git submodule status --recursive > "$RUNNER_TEMP/package/Payload/Madeira.app/madeira-build-submodules.txt"
           cd "$RUNNER_TEMP/package"
-          zip -qry Madeira-main-279fd0f-full32-unsigned.ipa Payload
-          unzip -tq Madeira-main-279fd0f-full32-unsigned.ipa
-          shasum -a 256 Madeira-main-279fd0f-full32-unsigned.ipa > Madeira-main-279fd0f-full32-unsigned.ipa.sha256
+          zip -qry Madeira-279fd0f-dockscm-unsigned.ipa Payload
+          unzip -tq Madeira-279fd0f-dockscm-unsigned.ipa
+          shasum -a 256 Madeira-279fd0f-dockscm-unsigned.ipa > Madeira-279fd0f-dockscm-unsigned.ipa.sha256
       - uses: actions/upload-artifact@v7.0.1
         with:
-          name: Madeira-main-279fd0f-full32-unsigned
-          path: ${{ runner.temp }}/package/Madeira-main-279fd0f-full32-unsigned.ipa*
+          name: Madeira-279fd0f-dockscm-unsigned
+          path: ${{ runner.temp }}/package/Madeira-279fd0f-dockscm-unsigned.ipa*
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
       - name: Save native prerequisite progress
         if: always() && !cancelled() && steps.native-cache.outputs.cache-primary-key != ''
         uses: actions/cache/save@v6.1.0
@@ -250,4 +250,4 @@ jobs:
             build/**/err-*.txt
             wine/build-macos/config.log
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 7
