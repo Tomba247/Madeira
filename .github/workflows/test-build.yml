@@ -4,6 +4,11 @@ on:
   push:
     branches: [rdr2-dock-scm-build]
   workflow_dispatch:
+    inputs:
+      xtajit64_from_source:
+        description: Build xtajit64.dll from FEX with build/patches (off ships the committed prebuilt)
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -168,6 +173,20 @@ jobs:
             exit 1
           fi
           bash tests/x86/build.sh hello-x86
+      # After the FEX iOS and WoW64 builds, so they keep building the unpatched tree.
+      # No `brew install ccache` here: Homebrew's ccache depends on fmt, and FEX's
+      # find_package(fmt) then picks /opt/homebrew's shared fmt for this MinGW build
+      # ("IMPORTED_IMPLIB not set for imported target fmt::fmt"; the toolchain file
+      # sets no find root, so PATH-derived prefixes are searched).
+      - name: Build the patched FEX ARM64EC module (xtajit64.dll)
+        if: github.event_name != 'workflow_dispatch' || inputs.xtajit64_from_source
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash build/ci-fex-arm64ec.sh "$RUNNER_TEMP/fex-arm64ec-source.txt" 2>&1 | tee "$RUNNER_TEMP/fex-arm64ec-build.log"
+        env:
+          CMAKE_BUILD_PARALLEL_LEVEL: 3
+          MADEIRA_EXPECT_RPMALLOC_MARKER: 'rpmalloc-span4 madeira-bcd'
       - name: Build Debug app without signing
         shell: bash
         run: |
@@ -185,6 +204,15 @@ jobs:
           ditto "$RUNNER_TEMP/madeira-derived/Build/Products/Debug-iphoneos/Madeira.app" \
             "$RUNNER_TEMP/package/Payload/Madeira.app"
           printf "upstream=279fd0f83170425db002fe25d6bd62f6355f497d\nbuild=%s\nconfiguration=Debug\n" "$GITHUB_SHA" > "$RUNNER_TEMP/package/Payload/Madeira.app/madeira-build-source.txt"
+          xtajit64_sha="$(shasum -a 256 "$RUNNER_TEMP/package/Payload/Madeira.app/arm64ec-windows/xtajit64.dll" | cut -d' ' -f1)"
+          if [ -f "$RUNNER_TEMP/fex-arm64ec-source.txt" ]; then
+            grep -qx "xtajit64.dll-sha256=$xtajit64_sha" "$RUNNER_TEMP/fex-arm64ec-source.txt" ||
+              { echo 'The app does not carry the xtajit64.dll built from source.' >&2; exit 1; }
+            cat "$RUNNER_TEMP/fex-arm64ec-source.txt" >> "$RUNNER_TEMP/package/Payload/Madeira.app/madeira-build-source.txt"
+          else
+            echo "fex-arm64ec=committed-prebuilt" >> "$RUNNER_TEMP/package/Payload/Madeira.app/madeira-build-source.txt"
+          fi
+          echo "xtajit64.dll-packaged-sha256=$xtajit64_sha" >> "$RUNNER_TEMP/package/Payload/Madeira.app/madeira-build-source.txt"
           python3 - <<'PY'
           import os, plistlib
           from pathlib import Path
@@ -242,6 +270,8 @@ jobs:
           path: |
             ${{ runner.temp }}/ios-build.log
             ${{ runner.temp }}/fex-wow64-build.log
+            ${{ runner.temp }}/fex-arm64ec-build.log
+            FEX/build-arm64ec/CMakeFiles/CMakeConfigureLog.yaml
             ${{ runner.temp }}/wine-i386-build.log
             wine/build-i386/madeira-i386-build.log
             FEX/build-ios/CMakeFiles/CMakeConfigureLog.yaml
