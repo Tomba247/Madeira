@@ -3042,6 +3042,36 @@ static NTSTATUS invoke_user_apc( CONTEXT *context, const struct user_apc *apc, N
 }
 
 
+#ifdef WINE_IOS
+/* set_async_iosb() publishes Status with WriteRelease, an stlr. x86 takes that
+ * store at any address; arm64 faults on a misaligned one (EXC_ARM_DA_ALIGN), and
+ * the program decides where its IO_STATUS_BLOCK lives. The Rockstar launcher's
+ * cloud-save upload passes one at an odd address (...be3f, ...2a0e), so the
+ * completion APC died here and the launcher ended with an unhandled c0000005
+ * before starting the game. A misaligned block gets the same ordering from a
+ * release fence before a plain store, which arm64 allows unaligned; an aligned
+ * one keeps set_async_iosb() as it is. */
+static void ios_set_async_iosb( client_ptr_t iosb, NTSTATUS status, ULONG_PTR info )
+{
+    char *io = wine_server_get_ptr( iosb );
+
+    if (!iosb || !((ULONG_PTR)io & 3))
+    {
+        set_async_iosb( iosb, status, info );
+        return;
+    }
+    if (in_wow64_call())
+    {
+        ULONG info32 = info;
+        memcpy( io + offsetof( IO_STATUS_BLOCK32, Information ), &info32, sizeof(info32) );
+    }
+    else memcpy( io + offsetof( IO_STATUS_BLOCK, Information ), &info, sizeof(info) );
+    __atomic_thread_fence( __ATOMIC_RELEASE );
+    memcpy( io, &status, sizeof(status) );
+}
+#endif
+
+
 /***********************************************************************
  *              invoke_system_apc
  */
@@ -3069,7 +3099,11 @@ static void invoke_system_apc( const union apc_call *call, union apc_result *res
             result->async_io.status = status;
             result->async_io.total = info;
             /* the server will pass us NULL if a call failed synchronously */
+#ifdef WINE_IOS
+            ios_set_async_iosb( call->async_io.sb, result->async_io.status, info );
+#else
             set_async_iosb( call->async_io.sb, result->async_io.status, info );
+#endif
         }
         else result->async_io.status = STATUS_PENDING; /* restart it */
         break;
