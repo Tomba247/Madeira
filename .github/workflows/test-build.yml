@@ -192,6 +192,14 @@ jobs:
         run: |
           set -euo pipefail
           bash build/ci-ntdll-arm64ec.sh "$RUNNER_TEMP/ntdll-arm64ec-source.txt" 2>&1 | tee "$RUNNER_TEMP/ntdll-arm64ec-build.log"
+      # A failure keeps the committed prebuilt d3d12.dll (the script replaces it
+      # only after its checks pass); the build log says which one shipped.
+      - name: Build the ARM64EC d3d12.dll (madeira-d3d12)
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash build/ci-d3d12-arm64ec.sh "$RUNNER_TEMP/d3d12-arm64ec-source.txt" 2>&1 | tee "$RUNNER_TEMP/d3d12-arm64ec-build.log"
       - name: Build Debug app without signing
         shell: bash
         run: |

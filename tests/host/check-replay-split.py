@@ -11,6 +11,8 @@ has a bucket the line names, and textually that:
   - the switch is read with default 0 and costs nothing when off (every
     timer read in the replay is behind the flag);
   - mad_exec_list sums per list and adds to the globals once per list;
+  - the indirect split (kind, encoder opened or not) is noted only when on
+    and printed with the replay split line;
   - mad_ecl_run times the queue lock, prebuild, batch open and flush;
   - the [perf] block prints the line after the encode split.
 Needs python3 and a C compiler (CC, default cc).
@@ -66,12 +68,17 @@ assert 'g_replay_split = mad_cfg_int_pe("replay-split", 0) ? 1 : 0;' in src
 el = src[src.index('static void mad_exec_list(struct mad_queue *q, struct mad_list *l, obj_handle_t cb) {'):]
 el = el[:el.index('\n}\n')]
 assert 'const int rs = mad_rs_on();' in el and 'UINT64 rs_t = rs ? mad_tick() : 0;' in el
-assert el.count('mad_tick()') == 3, 'three timer reads in the replay, all behind rs'
+assert el.count('mad_tick()') == 4, 'four timer reads in the replay (one for the indirect split), all behind rs'
 for m in re.finditer(r'mad_tick\(\)', el):
     line = el[el.rfind('\n', 0, m.start()) + 1:el.find('\n', m.start())]
     ctx = el[max(0, m.start() - 200):m.start()]
     assert 'rs ?' in line or 'if (rs)' in ctx, line
 assert el.count('InterlockedExchangeAdd64(&g_rs_t[b], rs_sum[b])') == 1, 'globals once per list'
+# the indirect split: noted only when replay-split is on, reported with the replay split line
+assert el.count('mad_rsi_note(') == 1
+note = el.index('mad_rsi_note(')
+assert 'if (rs) {' in el[note - 200:note], 'the indirect split is behind rs'
+assert 'mad_rsi_report(np, tf);' in src[src.index('static void mad_rs_report(double presents) {'):]
 print('PASS: mad_exec_list reads the timer only when replay-split is on and adds to the globals once per list')
 
 er = src[src.index('static void mad_ecl_run(ID3D12CommandQueue *This, UINT count, ID3D12CommandList *const *lists) {'):]

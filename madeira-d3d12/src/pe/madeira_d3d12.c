@@ -6459,6 +6459,40 @@ static inline void mad_rs_step(int b, UINT64 *t0) {
     InterlockedIncrement(&g_rs_n[b]);
     *t0 = t1;
 }
+/* madeira-bcd: replay split of ExecuteIndirect (replay-split = 1). RDR2
+ * (2026-10-19) spends 22-28 ms a frame on ~500 ExecuteIndirect calls, every one
+ * a single record (so indirect-fast never applies): ~50 us each against ~3.5 us
+ * for a direct draw. Split that time by kind (indexed draw, draw, dispatch) and
+ * by whether the call opened the Metal encoder it encoded into (a render pass
+ * or a compute encoder begun for it), and count the indirect-tessellation
+ * prepass, to tell the encoder setup apart from the call itself. */
+static volatile LONG64 g_rsi_t[3][2];
+static volatile LONG g_rsi_n[3][2], g_rsi_tess;
+static void mad_rsi_note(enum mad_ck kind, int opened, int tess, UINT64 t0) {
+    int k = kind == MC_DRAW_INDEXED_INDIRECT ? 0 : kind == MC_DRAW_INDIRECT ? 1 : 2;
+    InterlockedExchangeAdd64(&g_rsi_t[k][opened], (LONG64)(mad_tick() - t0));
+    InterlockedIncrement(&g_rsi_n[k][opened]);
+    if (tess) InterlockedIncrement(&g_rsi_tess);
+}
+static void mad_rsi_report(double np, double tf) {
+    static const char *const kn[3] = { "indexed draw", "draw", "dispatch" };
+    char buf[512];
+    int pos, k, o, any = 0;
+    pos = snprintf(buf, sizeof buf, "[perf] indirect split per frame:");
+    for (k = 0; k < 3; k++)
+        for (o = 0; o < 2; o++) {
+            LONG64 t = InterlockedExchange64(&g_rsi_t[k][o], 0);
+            LONG n = InterlockedExchange(&g_rsi_n[k][o], 0);
+            if (!n || pos <= 0 || pos >= (int)sizeof buf) continue;
+            any = 1;
+            pos += snprintf(buf + pos, sizeof buf - pos, " %s%s %.2f ms (%.0f, %.1f us each)", kn[k],
+                            o ? " opening its encoder" : "", 1000.0 * (double)t / tf / np, n / np,
+                            1e6 * (double)t / tf / n);
+        }
+    k = (int)InterlockedExchange(&g_rsi_tess, 0);
+    if (k && pos > 0 && pos < (int)sizeof buf) snprintf(buf + pos, sizeof buf - pos, "; tessellation prepass %.0f", k / np);
+    if (any) d3d12_log("%s\n", buf);
+}
 static void mad_rs_report(double presents) {
     char buf[640];
     double tf = (double)mad_tick_freq(), np = presents > 0 ? presents : 1.0;
@@ -6472,6 +6506,7 @@ static void mad_rs_report(double presents) {
         pos += snprintf(buf + pos, sizeof buf - pos, " %s %.2f ms (%.0f)", g_rs_names[b], 1000.0 * (double)t / tf / np, n / np);
     }
     d3d12_log("%s\n", buf);
+    mad_rsi_report(np, tf);
 }
 
 /* ---- madeira-bcd skin-check (diagnostic, opt-in) ------------------------------
@@ -9756,6 +9791,8 @@ static void mad_exec_list(struct mad_queue *q, struct mad_list *l, obj_handle_t 
         case MC_DRAW_INDIRECT: case MC_DRAW_INDEXED_INDIRECT: case MC_DISPATCH_INDIRECT: {
             struct mad_cmd t = *c; UINT k; UINT64 toff = 0;
             int tess = 0;
+            const UINT64 rsi_t = rs ? mad_tick() : 0;   /* madeira-bcd: indirect split */
+            const obj_handle_t rsi_enc = c->kind == MC_DISPATCH_INDIRECT ? e.cenc : e.renc;
             if (!c->u.ind.args || !c->u.ind.args->buffer) { e.skipped++; break; }
             exec_indirect_probe(&e, c);   /* madeira-bcd: diagnostics, every 3 s per pipeline */
             if (c->kind != MC_DISPATCH_INDIRECT && e.pso && e.pso->gs_emu == 2)   /* madeira-bcd */
@@ -9775,6 +9812,10 @@ static void mad_exec_list(struct mad_queue *q, struct mad_list *l, obj_handle_t 
             }
             e.tind_buf = 0; e.tind_off = 0;
             if (g_sd_state > 0 && g_ic_frames) mad_ic_note(&e, c);   /* madeira-bcd: ind-count */
+            if (rs) {
+                const obj_handle_t enc = c->kind == MC_DISPATCH_INDIRECT ? e.cenc : e.renc;
+                mad_rsi_note(c->kind, enc && enc != rsi_enc, tess, rsi_t);
+            }
             break;
         }
         case MC_COPY_BB: case MC_COPY_B2T: case MC_COPY_T2B: case MC_COPY_T2T: case MC_FILL_BB: case MC_FILL_TEX: exec_copy(&e, c);
