@@ -9,7 +9,9 @@
 # Patches apply in C-locale name order; one that does not apply fails the build.
 # build/wine-pe/build-ntdll.sh does the build, strip and padding. The patches are
 # reverted when this script exits. The DLL must carry the [ldr-order] marker of
-# 0001-ldr-windows-order.patch. Patch hashes and the DLL sha256 are written to $1.
+# 0001-ldr-windows-order.patch and the unnamed-image marker of
+# 0002-map-notify-unnamed-exec-image.patch. Patch hashes and the DLL sha256 are
+# written to $1.
 set -euo pipefail
 export LC_ALL=C
 R="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -53,4 +55,6 @@ bash "$R/build/wine-pe/build-ntdll.sh"
 # exits on its match before strings has written everything.
 grep -aq '\[ldr-order\]' "$DLL" ||
     { echo "error: $DLL does not carry the [ldr-order] marker" >&2; exit 1; }
+grep -aq 'unnamed image view with execute access' "$DLL" ||
+    { echo "error: $DLL does not carry the [map-notify] unnamed-image marker" >&2; exit 1; }
 echo "ntdll.dll $(shasum -a 256 "$DLL" | cut -d' ' -f1)" | tee -a "$OUT"

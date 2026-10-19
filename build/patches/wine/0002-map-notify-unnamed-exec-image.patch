@@ -1,0 +1,48 @@
+diff --git a/dlls/ntdll/signal_arm64ec.c b/dlls/ntdll/signal_arm64ec.c
+index 2a1333f..8a9eadb 100644
+--- a/dlls/ntdll/signal_arm64ec.c
++++ b/dlls/ntdll/signal_arm64ec.c
+@@ -1901,13 +1901,6 @@ static void notify_map_view_of_section( HANDLE handle, void *addr, SIZE_T size,
+         }
+     }
+     if (!pNotifyMapViewOfSection) return;
+-    if (!NtCurrentTeb()->Tib.ArbitraryUserPointer)
+-    {
+-        static int skip_aup;
+-        if (skip_aup < 20)
+-        { skip_aup++; ERR( "[map-notify] SKIP (no ArbitraryUserPointer) addr=%p size=%p\n", addr, (void *)size ); }
+-        return;
+-    }
+     if (NtQuerySection( handle, SectionImageInformation, &info, sizeof(info), NULL ))
+     {
+         static int skip_qs;
+@@ -1915,6 +1908,29 @@ static void notify_map_view_of_section( HANDLE handle, void *addr, SIZE_T size,
+         { skip_qs++; ERR( "[map-notify] SKIP (not an image section) addr=%p size=%p\n", addr, (void *)size ); }
+         return;
+     }
++    /* madeira-bcd: an image view the loader is not mapping (no ArbitraryUserPointer)
++     * is still registered with FEX when its section handle grants SECTION_MAP_EXECUTE.
++     * BO3 (2026-10-19) maps a second gdi32.dll that way and calls into it: the view
++     * got its executable pool copy, but FEX had no interval for it, so the first
++     * call decoded as NOEXEC and the process died with c0000005. FEX takes the
++     * module name from the section file, not from ArbitraryUserPointer. A view
++     * without execute access stays unregistered: it is a resource / version query
++     * (LOAD_LIBRARY_AS_IMAGE_RESOURCE), mapped without a pool copy on the unix side. */
++    if (!NtCurrentTeb()->Tib.ArbitraryUserPointer)
++    {
++        OBJECT_BASIC_INFORMATION obj;
++        BOOL exec = !NtQueryObject( handle, ObjectBasicInformation, &obj, sizeof(obj), NULL ) &&
++                    (obj.GrantedAccess & SECTION_MAP_EXECUTE);
++        static int skip_aup, unnamed_n;
++        if (!exec)
++        {
++            if (skip_aup < 20)
++            { skip_aup++; ERR( "[map-notify] SKIP (no ArbitraryUserPointer, no execute access) addr=%p size=%p\n", addr, (void *)size ); }
++            return;
++        }
++        if (unnamed_n < 20)
++        { unnamed_n++; ERR( "[map-notify] unnamed image view with execute access addr=%p size=%p: registering it with FEX\n", addr, (void *)size ); }
++    }
+     ios_note_big_image( addr, size );
+     status = pNotifyMapViewOfSection( NULL, addr, NULL, size, alloc, protect );
+     if (NT_SUCCESS(status)) return;
