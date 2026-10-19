@@ -9072,11 +9072,18 @@ static void exec_indirect_probe(struct mad_exec *e, const struct mad_cmd *c) {
     const struct mad_pso *p = c->kind == MC_DISPATCH_INDIRECT ? e->cpso : e->pso;
     struct wmtcmd_compute_setpso sp; struct wmtcmd_compute_setbuffer sb[2]; struct wmtcmd_compute_setbytes sby; struct wmtcmd_compute_dispatch dsp;
     UINT32 n = c->kind == MC_DISPATCH_INDIRECT ? 3 : c->kind == MC_DRAW_INDEXED_INDIRECT ? 5 : 4;
-    DWORD now = GetTickCount();
+    DWORD now;
     unsigned k, slot = ~0u;
     UINT64 off;
     if (on < 0) on = (int)mad_cfg_int_pe("ind-probe", 1);
     if (!on || !p || (c->u.ind.off & 3) || said >= 1500 || !mad_kernels_ready(d) || !d->k_probe_pso || !d->k_ring_cpu) return;
+    /* madeira-bcd: the clock only once the probe runs. GetTickCount reads
+     * KUSER_SHARED_DATA at 0x7ffe0320, below iOS's 4 GB page zero, so every
+     * call is a fault the subfloor handler services: ~27 us. Read before the
+     * checks above, it cost every ExecuteIndirect that even with ind-probe = 0
+     * (RDR2, 2026-10-19: ~4 us of encoding, ~31 us per call, ~530 calls a frame,
+     * ~2 million serviced accesses in six minutes). */
+    now = GetTickCount();
     AcquireSRWLockExclusive(&g_iprobe_lock);
     for (k = 0; k < sizeof g_iprobe / sizeof g_iprobe[0]; k++) {
         if (g_iprobe[k].pso == p) { slot = k; break; }
