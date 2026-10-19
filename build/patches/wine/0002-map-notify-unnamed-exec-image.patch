@@ -1,8 +1,49 @@
 diff --git a/dlls/ntdll/signal_arm64ec.c b/dlls/ntdll/signal_arm64ec.c
-index 2a1333f..8a9eadb 100644
+index 2a1333f..e92f5b7 100644
 --- a/dlls/ntdll/signal_arm64ec.c
 +++ b/dlls/ntdll/signal_arm64ec.c
-@@ -1901,13 +1901,6 @@ static void notify_map_view_of_section( HANDLE handle, void *addr, SIZE_T size,
+@@ -1877,9 +1877,40 @@ static void ios_log_unmap( void *addr )
+     }
+ }
+ 
++/* madeira-bcd: the ARM64EC dispatch pointers of an image view the loader is not
++ * mapping. The loader fills a hybrid module's __os_arm64x_* pointers (its CHPE
++ * metadata) once it is mapped (arm64ec_update_hybrid_metadata, from loader.c);
++ * a view a program maps itself never gets them, so its ARM64EC code branches to
++ * a null __os_arm64x_dispatch_call. BO3 (2026-10-19, with env.MADEIRA_SYSX64_IMAGE)
++ * calls GdiDllInitialize in its own gdi32.dll copy and died at pc 0 from
++ * gdi32+0x544e4. The metadata pointer is a VA of the preferred base until the
++ * view is relocated, so either base is accepted. */
++static void ios_unnamed_hybrid_metadata( void *module )
++{
++    IMAGE_NT_HEADERS *nt = RtlImageNtHeader( module );
++    IMAGE_LOAD_CONFIG_DIRECTORY *cfg;
++    ULONG_PTR meta, base = (ULONG_PTR)module, pref, end;
++    ULONG size;
++    static int said;
++
++    if (!nt || nt->FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64) return;
++    if (!(cfg = RtlImageDirectoryEntryToData( module, TRUE, IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG, &size ))) return;
++    size = min( size, cfg->Size );
++    if (size <= offsetof( IMAGE_LOAD_CONFIG_DIRECTORY, CHPEMetadataPointer ) || !cfg->CHPEMetadataPointer) return;
++    meta = cfg->CHPEMetadataPointer;
++    pref = nt->OptionalHeader.ImageBase;
++    end = nt->OptionalHeader.SizeOfImage;
++    if (meta >= base && meta < base + end) ;
++    else if (meta >= pref && meta < pref + end) meta = meta - pref + base;
++    else return;
++    if (said++ < 16) ERR( "[map-notify] unnamed hybrid image %p: ARM64EC dispatch pointers set (metadata %p)\n", module, (void *)meta );
++    arm64ec_update_hybrid_metadata( module, nt, (const IMAGE_ARM64EC_METADATA *)meta );
++}
++
+ static void notify_map_view_of_section( HANDLE handle, void *addr, SIZE_T size, ULONG alloc,
+                                         ULONG protect, NTSTATUS *ret_status )
+ {
++    BOOL unnamed = FALSE;
+     SECTION_IMAGE_INFORMATION info;
+     NTSTATUS status;
+ 
+@@ -1901,13 +1932,6 @@ static void notify_map_view_of_section( HANDLE handle, void *addr, SIZE_T size,
          }
      }
      if (!pNotifyMapViewOfSection) return;
@@ -16,7 +57,7 @@ index 2a1333f..8a9eadb 100644
      if (NtQuerySection( handle, SectionImageInformation, &info, sizeof(info), NULL ))
      {
          static int skip_qs;
-@@ -1915,6 +1908,29 @@ static void notify_map_view_of_section( HANDLE handle, void *addr, SIZE_T size,
+@@ -1915,9 +1939,37 @@ static void notify_map_view_of_section( HANDLE handle, void *addr, SIZE_T size,
          { skip_qs++; ERR( "[map-notify] SKIP (not an image section) addr=%p size=%p\n", addr, (void *)size ); }
          return;
      }
@@ -42,7 +83,16 @@ index 2a1333f..8a9eadb 100644
 +        }
 +        if (unnamed_n < 20)
 +        { unnamed_n++; ERR( "[map-notify] unnamed image view with execute access addr=%p size=%p: registering it with FEX\n", addr, (void *)size ); }
++        unnamed = TRUE;
 +    }
      ios_note_big_image( addr, size );
      status = pNotifyMapViewOfSection( NULL, addr, NULL, size, alloc, protect );
-     if (NT_SUCCESS(status)) return;
+-    if (NT_SUCCESS(status)) return;
++    if (NT_SUCCESS(status))
++    {
++        if (unnamed) ios_unnamed_hybrid_metadata( addr );   /* the view's own headers: the unix side may map another file (sysx64-image) */
++        return;
++    }
+     NtUnmapViewOfSection( GetCurrentProcess(), addr );
+     *ret_status = status;
+ }

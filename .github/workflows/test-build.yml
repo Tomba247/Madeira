@@ -236,13 +236,16 @@ jobs:
           PY
           git submodule status --recursive > "$RUNNER_TEMP/package/Payload/Madeira.app/madeira-build-submodules.txt"
           cd "$RUNNER_TEMP/package"
-          zip -qry Madeira-279fd0f-bo3-unsigned.ipa Payload
-          unzip -tq Madeira-279fd0f-bo3-unsigned.ipa
-          shasum -a 256 Madeira-279fd0f-bo3-unsigned.ipa > Madeira-279fd0f-bo3-unsigned.ipa.sha256
+          # the commit in the name: test builds and release IPAs cannot be mixed up
+          IPA="Madeira-279fd0f-bo3-${GITHUB_SHA:0:7}-unsigned"
+          echo "IPA=$IPA" >> "$GITHUB_ENV"
+          zip -qry "$IPA.ipa" Payload
+          unzip -tq "$IPA.ipa"
+          shasum -a 256 "$IPA.ipa" > "$IPA.ipa.sha256"
       - uses: actions/upload-artifact@v7.0.1
         with:
-          name: Madeira-279fd0f-bo3-unsigned
-          path: ${{ runner.temp }}/package/Madeira-279fd0f-bo3-unsigned.ipa*
+          name: ${{ env.IPA }}
+          path: ${{ runner.temp }}/package/${{ env.IPA }}.ipa*
           if-no-files-found: error
           retention-days: 7
       - name: Save native prerequisite progress
