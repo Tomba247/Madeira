@@ -14,16 +14,16 @@ jobs:
     timeout-minutes: 180
     env:
       GH_TOKEN: ${{ github.token }}
-      BUILD_RUN: '39319147367'
-      SOURCE_SHA: b9d06949569b1dbfa177526e0c94e3e42f65dc27
-      TAG: rdr2-test-b9d0694
+      BUILD_RUN: '39338076631'
+      SOURCE_SHA: 611924f87d5e73eb2d505efd0baadfa4ba561077
+      TAG: rdr2-test-611924f
     steps:
       - uses: actions/checkout@v7.0.1
       - name: Wait for the IPA build to finish
         run: gh run watch "$BUILD_RUN" --repo "$GITHUB_REPOSITORY" --exit-status --interval 60 > /dev/null
       - uses: actions/download-artifact@v8.0.1
         with:
-          name: Madeira-279fd0f-bo3-unsigned
+          name: Madeira-279fd0f-bo3-611924f-unsigned
           run-id: ${{ env.BUILD_RUN }}
           github-token: ${{ github.token }}
           path: dist
@@ -31,10 +31,10 @@ jobs:
         working-directory: dist
         run: |
           ls -la
-          shasum -a 256 -c Madeira-279fd0f-bo3-unsigned.ipa.sha256
+          shasum -a 256 -c Madeira-279fd0f-bo3-611924f-unsigned.ipa.sha256
       - name: Create the release
         run: |
-          gh release create "$TAG" dist/Madeira-279fd0f-bo3-unsigned.ipa dist/Madeira-279fd0f-bo3-unsigned.ipa.sha256 \
+          gh release create "$TAG" dist/Madeira-279fd0f-bo3-611924f-unsigned.ipa dist/Madeira-279fd0f-bo3-611924f-unsigned.ipa.sha256 \
             --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --prerelease \
-            --title "Madeira test build: Red Dead Redemption 2 with fewer freezes (unofficial)" \
-            --notes-file .github/release-notes-rdr2-b9d0694.md
+            --title "Madeira test build: Red Dead Redemption 2 at 30 fps, Black Ops II (unofficial)" \
+            --notes-file .github/release-notes-611924f.md
