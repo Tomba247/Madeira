@@ -24,7 +24,6 @@ WINE="$R/wine"
 if command -v brew >/dev/null && [ -x "$(brew --prefix bison)/bin/bison" ]; then
     export PATH="$(brew --prefix bison)/bin:$PATH"
 fi
-STRINGS="$(command -v strings || echo "$TC/llvm-strings")"
 
 APPLIED=()
 revert() {
@@ -50,6 +49,8 @@ mkdir -p "$(dirname "$OUT")"
 
 bash "$R/build/wine-pe/build-ntdll.sh"
 
-"$STRINGS" "$DLL" | grep -q '\[ldr-order\]' ||
+# grep reads the file itself: `strings | grep -q` fails under pipefail when grep
+# exits on its match before strings has written everything.
+grep -aq '\[ldr-order\]' "$DLL" ||
     { echo "error: $DLL does not carry the [ldr-order] marker" >&2; exit 1; }
 echo "ntdll.dll $(shasum -a 256 "$DLL" | cut -d' ' -f1)" | tee -a "$OUT"
