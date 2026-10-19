@@ -187,6 +187,11 @@ jobs:
         env:
           CMAKE_BUILD_PARALLEL_LEVEL: 3
           MADEIRA_EXPECT_RPMALLOC_MARKER: 'rpmalloc-span4 madeira-bcd'
+      - name: Build the patched ARM64EC ntdll.dll
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash build/ci-ntdll-arm64ec.sh "$RUNNER_TEMP/ntdll-arm64ec-source.txt" 2>&1 | tee "$RUNNER_TEMP/ntdll-arm64ec-build.log"
       - name: Build Debug app without signing
         shell: bash
         run: |
@@ -271,6 +276,7 @@ jobs:
             ${{ runner.temp }}/ios-build.log
             ${{ runner.temp }}/fex-wow64-build.log
             ${{ runner.temp }}/fex-arm64ec-build.log
+            ${{ runner.temp }}/ntdll-arm64ec-build.log
             FEX/build-arm64ec/CMakeFiles/CMakeConfigureLog.yaml
             ${{ runner.temp }}/wine-i386-build.log
             wine/build-i386/madeira-i386-build.log

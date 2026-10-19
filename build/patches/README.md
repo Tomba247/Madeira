@@ -16,12 +16,20 @@ buffer (`libarm64ecfex.dll+0xfe770`, access violation at `0x800010`) and the pro
 | `fex/0001-callret-skip-reserve.patch` | `FEX` | Does not reserve the 8 MB + 8 KB call-return stack per thread when the stack is elided (the default). `MADEIRA_FEX_CALLRET_SKIP_RESERVE=0` keeps the reservation. | new |
 | `fex/0002-pool-null-safety.patch` | `FEX` | A failed pooled buffer claim reuses an idle buffer, retries for a few seconds, then ends the process with a clear log line instead of faulting through NULL. | new |
 
+`build/ci-ntdll-arm64ec.sh` likewise builds the ARM64EC PE `ntdll.dll` from the pinned wine
+with `build/patches/wine/*.patch`, in place of the committed prebuilt (without the patches the
+build reproduces the prebuilt's `.text` byte for byte):
+
+| Patch | Repo | What it does |
+|---|---|---|
+| `wine/0001-ldr-windows-order.patch` | `wine` | `MADEIRA_LDR_WINDOWS_ORDER=1` (off by default, set per game): ntdll heads the initialization-order list and the emulator's modules move behind kernel32/kernelbase in the load- and memory-order lists, as on Windows. Call of Duty Black Ops III looked up an ntdll routine in the first initialized module, found kernelbase there and crashed. Log marker `[ldr-order]`. |
+
 `build/ntdll-unix/virtual_ios.c` also carries `[arena-guard]`: a fixed or hinted guest
 reservation (Social Club's V8 asks for 4 GB at random hints) is refused when it overlaps the
 FEX arena, so the caller places it elsewhere. `MADEIRA_ARENA_GUARD=0` restores the old placement.
 
 Device markers to look for in a log: `rpmalloc-span4 madeira-bcd`, `callret-skip-reserve-v1`,
-`[pool-null] armed ... rev=pns2` and `[arena-guard]`.
+`[pool-null] armed ... rev=pns2`, `[arena-guard]` and, with the switch on, `[ldr-order]`.
 
 None of these have run on a device yet. The three FEX/rpmalloc patches were built together
 into `libarm64ecfex.dll` with llvm-mingw 20260421 (Linux) and compared against the committed
