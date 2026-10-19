@@ -2594,6 +2594,43 @@ static void ios_xprobe_main( void )
                           (pe.t_draw - ppe.t_draw) * qf, (pe.t_cmt - ppe.t_cmt) * qf, (pe.t_pool - ppe.t_pool) * qf,
                           (long long)(pe.ecl_calls - ppe.ecl_calls), (pe.t_ecl_caller - ppe.t_ecl_caller) * qf );
             wine_log_write( "%s", line );
+            /* madeira-bcd stall-sample: env.MADEIRA_STALL_SAMPLE = 1 (opt-in). RDR2 stops
+             * presenting for 1-3 s every 30 s at :09 and :39 past the minute, with the
+             * process nearly idle and one game thread still running; the 20 s
+             * [thread-sample] bursts never land in one. The first sample with no present
+             * after one with at least 3 takes an ml876 pass over every thread (waiters
+             * too), and the next sample one more; at most 16 stalls a session. Only
+             * with MADEIRA_LEAN_DIAG, so no burst of ios_thread_sampler_main runs at
+             * the same time (the passes share the module maps). */
+            if (qf)
+            {
+                static int stall_env = -1, stalls, follow, armed;
+                long long npres = (long long)(pe.pres_enq - ppe.pres_enq);
+                if (stall_env < 0)
+                {
+                    const char *e = getenv( "MADEIRA_STALL_SAMPLE" ), *lean = getenv( "MADEIRA_LEAN_DIAG" );
+                    stall_env = e && *e && strcmp( e, "0" ) != 0 && lean && *lean && strcmp( lean, "0" ) != 0;
+                    if (e && *e && strcmp( e, "0" ) != 0)
+                        wine_log_write( "[stall-sample] MADEIRA_STALL_SAMPLE=%s: %s", e,
+                                        stall_env ? "armed" : "off, it needs MADEIRA_LEAN_DIAG=1" );
+                }
+                if (stall_env)
+                {
+                    if (follow)
+                    {
+                        follow = 0;
+                        wine_log_write( "[stall-sample] #%d %s second pass (pres %lld)", stalls, wall, npres );
+                        ios_thread_sampler_pass( 0 );
+                    }
+                    else if (npres == 0 && armed && stalls < 16)
+                    {
+                        stalls++; follow = 1;
+                        wine_log_write( "[stall-sample] #%d %s no present after a presenting sample: every thread", stalls, wall );
+                        ios_thread_sampler_pass( 0 );
+                    }
+                    armed = npres >= 3;
+                }
+            }
             /* threads: roles always, then the busiest; role + Windows TID : P ms / E ms : P GHz / E GHz : M instructions */
             {
                 int printed[1024] = {0}, shown = 0;
