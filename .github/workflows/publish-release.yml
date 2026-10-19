@@ -14,9 +14,9 @@ jobs:
     timeout-minutes: 180
     env:
       GH_TOKEN: ${{ github.token }}
-      BUILD_RUN: '39172131458'
-      SOURCE_SHA: 2974d5f5257b26a8df04803b092fd50099f09a60
-      TAG: rdr2-test-2974d5f
+      BUILD_RUN: '39174357517'
+      SOURCE_SHA: efa2f5452cceec8918d89e4a3635e7266afc1376
+      TAG: rdr2-test-efa2f54
     steps:
       - uses: actions/checkout@v7.0.1
       - name: Wait for the IPA build to finish
@@ -36,5 +36,5 @@ jobs:
         run: |
           gh release create "$TAG" dist/Madeira-279fd0f-dockscm-unsigned.ipa dist/Madeira-279fd0f-dockscm-unsigned.ipa.sha256 \
             --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --prerelease \
-            --title "Madeira test build: Red Dead Redemption 2 reaches gameplay (unofficial)" \
+            --title "Madeira test build: Red Dead Redemption 2 with the cloud-save fix (unofficial)" \
             --notes-file .github/release-notes-rdr2.md
