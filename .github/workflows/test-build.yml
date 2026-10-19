@@ -228,13 +228,13 @@ jobs:
           PY
           git submodule status --recursive > "$RUNNER_TEMP/package/Payload/Madeira.app/madeira-build-submodules.txt"
           cd "$RUNNER_TEMP/package"
-          zip -qry Madeira-279fd0f-dockscm-unsigned.ipa Payload
-          unzip -tq Madeira-279fd0f-dockscm-unsigned.ipa
-          shasum -a 256 Madeira-279fd0f-dockscm-unsigned.ipa > Madeira-279fd0f-dockscm-unsigned.ipa.sha256
+          zip -qry Madeira-279fd0f-bo3-unsigned.ipa Payload
+          unzip -tq Madeira-279fd0f-bo3-unsigned.ipa
+          shasum -a 256 Madeira-279fd0f-bo3-unsigned.ipa > Madeira-279fd0f-bo3-unsigned.ipa.sha256
       - uses: actions/upload-artifact@v7.0.1
         with:
-          name: Madeira-279fd0f-dockscm-unsigned
-          path: ${{ runner.temp }}/package/Madeira-279fd0f-dockscm-unsigned.ipa*
+          name: Madeira-279fd0f-bo3-unsigned
+          path: ${{ runner.temp }}/package/Madeira-279fd0f-bo3-unsigned.ipa*
           if-no-files-found: error
           retention-days: 7
       - name: Save native prerequisite progress
