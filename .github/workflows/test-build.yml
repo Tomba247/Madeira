@@ -2,7 +2,7 @@ name: Current upstream Madeira IPA with Dock game-scm
 
 on:
   push:
-    branches: [rdr2-dock-scm-build]
+    branches: [rdr2-dock-scm-build, bo3-build]
   workflow_dispatch:
     inputs:
       xtajit64_from_source:
