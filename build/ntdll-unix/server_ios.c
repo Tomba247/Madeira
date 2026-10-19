@@ -743,6 +743,10 @@ static int ios_ts_sym(uint64_t a, char *out, size_t cap)
     return 1;
 }
 
+/* madeira-bcd stall-sample: a pass prints at most this many threads. 64 for the
+ * bursts; a stall pass lifts it, since RDR2's ~150 threads put the game's own
+ * last (build 2cd6f36: the one game thread running in a freeze was never reached). */
+static int ios_ts_print_cap = 64;
 static void ios_thread_sampler_pass(int burst)
 {
     extern uint64_t ios_native_rip_from_hostpc( uint64_t, uint64_t, const char ** );
@@ -750,7 +754,7 @@ static void ios_thread_sampler_pass(int burst)
     thread_act_array_t tlist; mach_msg_type_number_t tcount; unsigned k, printed = 0;
     if (task_threads(mach_task_self(), &tlist, &tcount) != KERN_SUCCESS) return;
     ios_ts_nmaps = 0;                                   /* fresh maps every pass */
-    for (k = 0; k < tcount && printed < 64; k++) {
+    for (k = 0; k < tcount && printed < ios_ts_print_cap; k++) {
         thread_basic_info_data_t bi; mach_msg_type_number_t bic = THREAD_BASIC_INFO_COUNT;
         arm_thread_state64_t st; mach_msg_type_number_t cnt = ARM_THREAD_STATE64_COUNT;
         char tname[40] = ""; pthread_t pt; int running, is_game;
@@ -2620,13 +2624,13 @@ static void ios_xprobe_main( void )
                     {
                         follow = 0;
                         wine_log_write( "[stall-sample] #%d %s second pass (pres %lld)", stalls, wall, npres );
-                        ios_thread_sampler_pass( 0 );
+                        ios_ts_print_cap = 512; ios_thread_sampler_pass( 0 ); ios_ts_print_cap = 64;
                     }
                     else if (npres == 0 && armed && stalls < 16)
                     {
                         stalls++; follow = 1;
                         wine_log_write( "[stall-sample] #%d %s no present after a presenting sample: every thread", stalls, wall );
-                        ios_thread_sampler_pass( 0 );
+                        ios_ts_print_cap = 512; ios_thread_sampler_pass( 0 ); ios_ts_print_cap = 64;
                     }
                     armed = npres >= 3;
                 }
