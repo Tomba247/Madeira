@@ -2029,6 +2029,7 @@ static ULONG STDMETHODCALLTYPE queue_Release(ID3D12CommandQueue *This) {
 /* ---- execution: replaying a list into Metal encoders -------------------- */
 struct mad_exec {
     int fence_needed;
+    UINT64 ds_t[2][5]; UINT ds_n[2];   /* madeira-bcd: exec_draw's steps (replay-split), indirect / direct; summed per list */
     obj_handle_t tind_buf; UINT64 tind_off;   /* madeira-bcd: this indirect tessellation draw's mesh dispatch arguments */
     struct mad_resource *wr[64]; unsigned nwr; int wr_all;   /* ml1116: written since the last fence wait (mode 3) */   /* ml1111: fence-chain = 2: a barrier (or list start) was seen since the last wait */
     struct mad_queue *q;
@@ -6474,6 +6475,34 @@ static void mad_rsi_note(enum mad_ck kind, int opened, int tess, UINT64 t0) {
     InterlockedIncrement(&g_rsi_n[k][opened]);
     if (tess) InterlockedIncrement(&g_rsi_tess);
 }
+static volatile LONG64 g_ds_t[2][5];
+static volatile LONG g_ds_n[2];
+static void mad_ds_add(const struct mad_exec *e) {
+    int r, k;
+    for (r = 0; r < 2; r++) {
+        if (!e->ds_n[r]) continue;
+        for (k = 0; k < 5; k++) InterlockedExchangeAdd64(&g_ds_t[r][k], (LONG64)e->ds_t[r][k]);
+        InterlockedExchangeAdd(&g_ds_n[r], (LONG)e->ds_n[r]);
+    }
+}
+/* us per draw for each step, indirect and direct draws side by side */
+static void mad_ds_report(double tf) {
+    static const char *const st[5] = { "pass", "setup", "tables", "params", "hand-over" };
+    char buf[512];
+    int pos, r, k;
+    LONG n[2];
+    LONG64 t[2][5];
+    for (r = 0; r < 2; r++) {
+        n[r] = InterlockedExchange(&g_ds_n[r], 0);
+        for (k = 0; k < 5; k++) t[r][k] = InterlockedExchange64(&g_ds_t[r][k], 0);
+    }
+    if (!n[0] && !n[1]) return;
+    pos = snprintf(buf, sizeof buf, "[perf] draw steps, us per draw (indirect %ld | direct %ld):", (long)n[0], (long)n[1]);
+    for (k = 0; k < 5 && pos > 0 && pos < (int)sizeof buf; k++)
+        pos += snprintf(buf + pos, sizeof buf - pos, " %s %.1f | %.1f", st[k],
+                        n[0] ? 1e6 * (double)t[0][k] / tf / n[0] : 0.0, n[1] ? 1e6 * (double)t[1][k] / tf / n[1] : 0.0);
+    d3d12_log("%s\n", buf);
+}
 static void mad_rsi_report(double np, double tf) {
     static const char *const kn[3] = { "indexed draw", "draw", "dispatch" };
     char buf[512];
@@ -6492,6 +6521,7 @@ static void mad_rsi_report(double np, double tf) {
     k = (int)InterlockedExchange(&g_rsi_tess, 0);
     if (k && pos > 0 && pos < (int)sizeof buf) snprintf(buf + pos, sizeof buf - pos, "; tessellation prepass %.0f", k / np);
     if (any) d3d12_log("%s\n", buf);
+    mad_ds_report(tf);
 }
 static void mad_rs_report(double presents) {
     char buf[640];
@@ -8115,6 +8145,12 @@ static struct wmtcmd_base *mad_dd_buf(struct mad_dd *d, struct wmtcmd_render_set
     return (struct wmtcmd_base *)s;
 }
 static void exec_draw(struct mad_exec *e, const struct mad_cmd *c) {
+    /* madeira-bcd draw steps (replay-split = 1): an indirect draw costs ~32 us,
+     * a direct one ~2.6 us (RDR2, 2026-10-19); time the steps of each kind */
+    const int ds_on = g_replay_split > 0;
+    const int ds_row = c->kind == MC_DRAW_INDIRECT || c->kind == MC_DRAW_INDEXED_INDIRECT ? 0 : 1;
+    UINT64 ds_t = ds_on ? mad_tick() : 0;
+#define MAD_DS_MARK(k) do { if (ds_on) { UINT64 t_ = mad_tick(); e->ds_t[ds_row][k] += t_ - ds_t; ds_t = t_; } } while (0)
     struct wmtcmd_render_setpso c_pso;
     struct wmtcmd_render_draw_indirect c_di;
     struct wmtcmd_render_setblendcolor c_bl;
@@ -8173,6 +8209,7 @@ static void exec_draw(struct mad_exec *e, const struct mad_cmd *c) {
     if (g_census_on) { exec_capture_draw(e, c); exec_desc_check(e, e->rs, e->root, e->pso->vs_name); }   /* ml910/ml913 */
     if (g_skin_check > 0) mad_skin_draw(e, c);   /* madeira-bcd skin-check: before the pass, its captures are blits */
     if (!exec_begin_render(e)) { MAD_SKIP(e); return; }
+    MAD_DS_MARK(0);   /* checks and the render pass */
     if (g_skip_ps_state && mad_skip_ps_match(e->pso)) { MAD_SKIP(e); return; }   /* madeira-bcd: diagnostic, off unless skip-ps is set */
     g_dump_tables = 0;
     if (g_capture_on && g_capture_ps[0] && mad_name_in_list(g_capture_ps, e->pso->ps_name) && g_capture_ps_shots < 8) {   /* ml1106; ml1152: any listed ps, 8 shots; madeira-bcd: exact names (a substring match let ps_SetColor eat the shots meant for ps_SetColor_MultiLight) */
@@ -8240,6 +8277,7 @@ tess_go:
         for (i = 0; i < 16; i++) strides[i] = e->vb[i].res ? e->vb[i].stride : e->pso->vb_stride[i];
         c_pso.pso = mad_pso_for_strides(e->pso, strides);
     }
+    MAD_DS_MARK(1);   /* argument slot and the pipeline (stride variant) */
     if (dd && !mad_dd_pso(dd, c_pso.pso)) c_pso.type = WMTRenderCommandNop;   /* madeira-bcd draw-dedup: the encoder has it */
     tail = (struct wmtcmd_base *)&c_pso;
 #define MAD_APPEND(node) do { tail->next.ptr = (node); tail = (struct wmtcmd_base *)(node); } while (0)
@@ -8340,6 +8378,7 @@ tess_go:
         MAD_SETBUF(WMTRenderCommandSetFragmentBuffer, e->smp->buffer, 0, 1);
     }
     }
+    MAD_DS_MARK(2);   /* state and argument tables */
     /* Vertex buffers ride at kIRVertexBufferBindPoint (6) + slot -- for the
      * DXIL (MSC) backend only. ml1105: the DXBC backend pulls vertices through
      * its table at Metal index 16, and this loop bound D3D slot 10 at 6 + 10 =
@@ -8643,6 +8682,7 @@ tess_go:
         c_draw.base_instance = c->u.draw.istart;
         MAD_APPEND(&c_draw);
     }
+    MAD_DS_MARK(3);   /* vertex buffers, draw parameters, the draw */
     {   /* ml1088: count this draw into the current slot while a query is open.
          * Placed last so a skipped draw above never leaves the encoder's mode
          * out of step with vis_prev. The mode command goes FIRST in the chain
@@ -8669,6 +8709,9 @@ tess_go:
      * one is never left queued, so Metal holds it as soon as it was chosen. */
     if (c_pso.type == WMTRenderCommandSetPSO && !tv && c_pso.pso != e->pso->rps) mad_eb_flush_cur(EBF_VARIANT);
     mad_use_commit(e);   /* this draw's useResource entries reached the encoder */
+    MAD_DS_MARK(4);   /* handing the chain over (encode-batch queue or encodeCommands) */
+    if (ds_on) e->ds_n[ds_row]++;
+#undef MAD_DS_MARK
 #undef MAD_APPEND
     e->draws++; e->pass_draws++;   /* ml1098 */
     if (e->nrt && e->rt[0] && e->rtp[0].layers > 1) {   /* ml926: layered draws */
@@ -9842,6 +9885,7 @@ static void mad_exec_list(struct mad_queue *q, struct mad_list *l, obj_handle_t 
         rs_sum[RS_LISTEND] += (LONG64)(mad_tick() - rs_t); rs_cnt[RS_LISTEND]++;
         for (b = 0; b < RS_N; b++)
             if (rs_cnt[b]) { InterlockedExchangeAdd64(&g_rs_t[b], rs_sum[b]); InterlockedExchangeAdd(&g_rs_n[b], rs_cnt[b]); }
+        mad_ds_add(&e);
     }
     /* ml1042: a PERIODIC summary. Every per-list line is rate-limited to the first
      * dozen, which is the menu -- so the first run to reach real 3D (black, ~2 FPS)
