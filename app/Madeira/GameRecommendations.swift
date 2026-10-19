@@ -117,8 +117,14 @@ enum GameRecommendations {
     /// engine (.be\vc_redist), which crashed with a lock held while the setup
     /// waited for it forever (12:43). With the line the setup fails at once and
     /// the installs pass (12:57); the session links its own VC++ DLLs anyway.
+    /// Version 11 (2026-10-19): classic swap coverage. With broad coverage every
+    /// freeze the stall sampler caught (six in a session) had one thread punching
+    /// holes in the swap file (fcntl F_PUNCHHOLE on decommit) while the game's and
+    /// Social Club's threads waited on its lock; with classic, three in 17 minutes
+    /// and no memory kill. And RDR2's own -cpuLoadRebalancing
+    /// -disableSchedulingContentionReduction, which a Steam launch cannot pass.
     static let rdr2Steam = GameRecommendation(
-        id: "rdr2-steam", title: "Red Dead Redemption 2 (Steam)", version: 10,
+        id: "rdr2-steam", title: "Red Dead Redemption 2 (Steam)", version: 11,
         config: """
         # Madeira's recommended settings for Red Dead Redemption 2 (Steam).
         # Reset to Recommended, at the bottom of the game's settings, brings them back.
@@ -146,6 +152,8 @@ enum GameRecommendations {
         env.MADEIRA_BAND_CENSUS = 1
         env.MADEIRA_RDR2_VA_HOLD = 1
         env.MADEIRA_SWAP_RESERVE_MAX_MB = 9216
+        env.MADEIRA_SWAP_COVERAGE = classic
+        env.MADEIRA_CHILD_ARGS = RDR2.exe -cpuLoadRebalancing -disableSchedulingContentionReduction
         env.MADEIRA_THREAD_STACK_SPILL = 1
         env.MADEIRA_SMALL_STACK_EXES = RDR2.exe
         env.MADEIRA_DOCK_GAME_SCM = 1
@@ -189,7 +197,7 @@ enum GameRecommendations {
     /// that keep that session alive), plus the line GTA V Enhanced's list outside
     /// Steam starts with: the [ec-hook] reporter off.
     static let rdr2Other = GameRecommendation(
-        id: "rdr2-other", title: "Red Dead Redemption 2 (outside Steam)", version: 1,
+        id: "rdr2-other", title: "Red Dead Redemption 2 (outside Steam)", version: 2,
         config: """
         # Madeira's recommended settings for Red Dead Redemption 2 outside Steam (Rockstar Games Launcher or another store).
         # Reset to Recommended, at the bottom of the game's settings, brings them back.
@@ -217,6 +225,8 @@ enum GameRecommendations {
         env.MADEIRA_BAND_CENSUS = 1
         env.MADEIRA_RDR2_VA_HOLD = 1
         env.MADEIRA_SWAP_RESERVE_MAX_MB = 9216
+        env.MADEIRA_SWAP_COVERAGE = classic
+        env.MADEIRA_CHILD_ARGS = RDR2.exe -cpuLoadRebalancing -disableSchedulingContentionReduction
         env.MADEIRA_THREAD_STACK_SPILL = 1
         env.MADEIRA_SMALL_STACK_EXES = RDR2.exe
         env.MADEIRA_DXGI_BUDGET_EVENTS = 1

@@ -115,7 +115,9 @@ print('PASS: eight lists, two comment lines each, every game list ends with the 
 # and build 480's (version 9: xinput1_4.dll loaded with the D3D12 device, the pool back to 128 MB of
 # image headroom after 479's 192 starved the game's code buffer, the orphan-lock reaper stamped-only)
 # and build 514's (version 10: the VC++ setup's elevated engine is not started; it crashed with a lock
-# held and the first install waited forever). Without madeira-bcd's env.MADEIRA_D3D11_SRC and
+# held and the first install waited forever) and 2026-10-19's (version 11: classic swap coverage, as
+# broad punched swap-file holes under the lock the game's threads waited on, and the game's own
+# -cpuLoadRebalancing -disableSchedulingContentionReduction). Without madeira-bcd's env.MADEIRA_D3D11_SRC and
 # env.MADEIRA_DXGI_SRC lines: here DXMT's own d3d11.dll and dxgi.dll carry those changes.
 rdr2 = '''d3d12-caps-log = 2
 d3d12-shader-pack = 1
@@ -141,6 +143,8 @@ env.FEX_VECTORTSOENABLED = 0
 env.MADEIRA_BAND_CENSUS = 1
 env.MADEIRA_RDR2_VA_HOLD = 1
 env.MADEIRA_SWAP_RESERVE_MAX_MB = 9216
+env.MADEIRA_SWAP_COVERAGE = classic
+env.MADEIRA_CHILD_ARGS = RDR2.exe -cpuLoadRebalancing -disableSchedulingContentionReduction
 env.MADEIRA_THREAD_STACK_SPILL = 1
 env.MADEIRA_SMALL_STACK_EXES = RDR2.exe
 env.MADEIRA_DOCK_GAME_SCM = 1
@@ -166,7 +170,7 @@ env.WINEDLLOVERRIDES = video64=
 env.MADEIRA_DEVICE_STATS = 1
 env.MADEIRA_METAL_HUD_MAIN = 1'''.split('\n')
 assert presets['rdr2-steam']['tested'] == rdr2, 'the RDR2 list differs from the owner\'s'
-assert presets['rdr2-steam']['version'] == 10, presets['rdr2-steam']['version']
+assert presets['rdr2-steam']['version'] == 11, presets['rdr2-steam']['version']
 assert presets['rdr2-steam']['switches'] == ('avx: false, nvidia: false, wineVCRT: false, fastSync: true, '
                                              'semaphoreFastPath: false, resolution: GameRecommendation.screen720, display: "fit"'), presets['rdr2-steam']['switches']
 assert 'static let screen720 = "screen@720"' in lists_src and 'resolution == Self.screen720 ? "this screen\'s shape at 720 lines" : resolution' in lists_src
@@ -178,7 +182,7 @@ dock_only = ['env.MADEIRA_DOCK_GAME_SCM = 1', 'env.MADEIRA_DOCK_KEEP_ALIVE = Lau
 assert all(line in rdr2 for line in dock_only), 'the Dock lines are the Steam copy\'s'
 assert rdr2_other['tested'] == [line for line in rdr2 if line not in dock_only] + ['env.MADEIRA_EC_HOOK_TRACE = 0'], \
     rdr2_other['lines']
-assert rdr2_other['version'] == 1 and rdr2_other['switches'] == presets['rdr2-steam']['switches'], rdr2_other
+assert rdr2_other['version'] == 2 and rdr2_other['switches'] == presets['rdr2-steam']['switches'], rdr2_other
 assert 'env.MADEIRA_EC_HOOK_TRACE = 0' in presets['gta5e-other']['lines']
 # Every other game and the Desktop (owner's decisions, 2026-10-12): the ec-hook reporter off and,
 # since version 3, nothing else (version 2 had the fork defaults); no switches.
@@ -263,7 +267,7 @@ assert got['switches'] == ('avx: true, nvidia: true, wineVCRT: false, fastSync: 
                            'resolution: "1280x720", display: "fit"'), got['switches']
 assert not any(line.startswith(('view-census', 'typed-view-align', 'typed-view-shadow'))
                for p in presets.values() if p is not hzd and p is not got for line in p['lines']), 'the typed-view fix is HZD\'s and GoT\'s only'
-print('PASS: RDR2 (Steam) is the owner\'s 463 list plus the 466, 467, 470, 472, 475, 476, 480 and 514 test lines (v10), line for line with its switches (720 lines of this screen), and outside Steam the same without the Dock lines, with the ec-hook reporter off (v1); GTA V Enhanced keeps its tested lines plus the stamped orphan-lock mode (v2) and, from Steam, the VC++ engine block (v3), GoW its tested lines; Horizon Zero Dawn has build 491\'s proven list plus build 494\'s frame-rate switches (v16), GoT the owner\'s build 515 list (v3); every other game and the Desktop the standard list (v3)')
+print('PASS: RDR2 (Steam) is the owner\'s 463 list plus the 466, 467, 470, 472, 475, 476, 480, 514 and 2026-10-19 test lines (v11), line for line with its switches (720 lines of this screen), and outside Steam the same without the Dock lines, with the ec-hook reporter off (v2); GTA V Enhanced keeps its tested lines plus the stamped orphan-lock mode (v2) and, from Steam, the VC++ engine block (v3), GoW its tested lines; Horizon Zero Dawn has build 491\'s proven list plus build 494\'s frame-rate switches (v16), GoT the owner\'s build 515 list (v3); every other game and the Desktop the standard list (v3)')
 
 # Recognition: Steam by App ID or steamapps\common folder; everything else by the program's name.
 match = block(lists_src, 'static func match(', '\n    }\n')
