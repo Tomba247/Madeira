@@ -2432,6 +2432,11 @@ struct LibraryView: View {
     /// The Settings tab's own search text, kept apart from the library's.
     @State private var settingsSearch = ""
     @State private var focused: UUID?
+    private func logDetailsRequest() {
+        let title: String = selected?.title ?? ""
+        let line: String = selected == nil ? "closed" : "requested: " + title
+        LogStore.shared.log("[library-tap] details " + line)
+    }
     @ObservedObject private var controller = LibraryController.shared
     @ObservedObject private var input = InputSettings.shared
     @State private var tab = 0
@@ -2777,9 +2782,7 @@ struct LibraryView: View {
             })
         }
         // A tap that opens nothing leaves these lines in the log ([library-tap]).
-        .onChange(of: selected?.id) { _, id in
-            LogStore.shared.log("[library-tap] details " + (id == nil ? "closed" : "requested: \(selected?.title ?? "?")"))
-        }
+        .onChange(of: selected?.id) { _, _ in logDetailsRequest() }
         .onChange(of: model.current) { _, current in if current != nil { selected = nil } }
         .onChange(of: model.error) { _, error in if error != nil { selected = nil } }
         .onChange(of: model.restartNotice) { _, notice in if notice != nil { selected = nil } }
