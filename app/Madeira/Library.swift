@@ -2776,6 +2776,10 @@ struct LibraryView: View {
                 }
             })
         }
+        // A tap that opens nothing leaves these lines in the log ([library-tap]).
+        .onChange(of: selected?.id) { _, id in
+            LogStore.shared.log("[library-tap] details " + (id == nil ? "closed" : "requested: \(selected?.title ?? "?")"))
+        }
         .onChange(of: model.current) { _, current in if current != nil { selected = nil } }
         .onChange(of: model.error) { _, error in if error != nil { selected = nil } }
         .onChange(of: model.restartNotice) { _, notice in if notice != nil { selected = nil } }
@@ -3265,6 +3269,7 @@ struct LibraryDetail: View {
                 if entry.graphicsAPI == nil, entry.desktop != true, let url = try? LibraryModel.executable(entry.relativePath) { entry.graphicsAPI = LibraryModel.graphicsImports(url) }
             }
             .onAppear {
+                LogStore.shared.log("[library-tap] details shown: \(entry.title)")
                 migrateEntryOptions()
                 prepareRecommendation()
                 reloadBCD()

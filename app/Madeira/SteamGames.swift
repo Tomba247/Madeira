@@ -575,6 +575,7 @@ struct SteamGamesSection: View {
     /// An installed game (by Madeira's download or by Steam's client) opens its
     /// Game details page; any other game opens its download sheet.
     private func select(_ item: SteamGamesRules.Item) {
+        LogStore.shared.log("[library-tap] steam app=\(item.id) installed=\(item.installed != nil ? 1 : 0)")
         if let installed = item.installed {
             open(LibraryModel.shared.steamEntry(installed, title: item.name))
         } else {
