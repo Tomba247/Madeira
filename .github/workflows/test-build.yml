@@ -71,6 +71,8 @@ jobs:
   ios:
     needs: [vcruntime, regression]
     runs-on: xcode-27
+    permissions:
+      contents: write   # the test pre-release and the SideStore / AltStore source (bo3-build only)
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v7.0.1
@@ -232,6 +234,12 @@ jobs:
           path = Path(os.environ['RUNNER_TEMP']) / 'package/Payload/Madeira.app/Info.plist'
           info = plistlib.loads(path.read_bytes())
           info['MadeiraBuild'] = 'upstream-279fd0f ' + os.environ['GITHUB_SHA'][:7]
+          # a version of its own per build, so SideStore / AltStore offer it as an update
+          run = os.environ['GITHUB_RUN_NUMBER']
+          info['CFBundleShortVersionString'] = '0.1.3.' + run
+          info['CFBundleVersion'] = run
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write('APP_VERSION=0.1.3.%s\nAPP_BUILD=%s\n' % (run, run))
           path.write_bytes(plistlib.dumps(info, fmt=plistlib.FMT_BINARY, sort_keys=False))
           PY
           git submodule status --recursive > "$RUNNER_TEMP/package/Payload/Madeira.app/madeira-build-submodules.txt"
@@ -248,6 +256,35 @@ jobs:
           path: ${{ runner.temp }}/package/${{ env.IPA }}.ipa*
           if-no-files-found: error
           retention-days: 7
+      # SideStore / AltStore: every bo3-build IPA becomes a pre-release and the
+      # newest entry of the source at releases/download/altstore-source/source.json.
+      # A failure here leaves the build and its artifact as they are.
+      - name: Publish the test build to the SideStore / AltStore source
+        if: github.ref == 'refs/heads/bo3-build' && github.event_name == 'push'
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/package"
+          TAG="test-${GITHUB_SHA:0:7}"
+          SUBJECT="$(git -C "$GITHUB_WORKSPACE" log -1 --format=%s "$GITHUB_SHA")"
+          NOTES="Unofficial test build ${GITHUB_SHA:0:7} (Madeira ${APP_VERSION}). Not made or supported by the Madeira developers. ${SUBJECT}"
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$TAG" "$IPA.ipa" "$IPA.ipa.sha256" --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "Madeira test build ${GITHUB_SHA:0:7} (unofficial)" --notes "$NOTES"
+          fi
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$IPA.ipa"
+          if ! gh release view altstore-source --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create altstore-source --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --prerelease --latest=false --title "SideStore / AltStore source (unofficial test builds)" \
+              --notes "Add https://github.com/$GITHUB_REPOSITORY/releases/download/altstore-source/source.json as a source in SideStore or AltStore. Each new test build then shows up as an update."
+          fi
+          gh release download altstore-source --repo "$GITHUB_REPOSITORY" --pattern source.json --dir . --clobber || true
+          python3 "$GITHUB_WORKSPACE/build/altstore-source.py" source.json "$IPA.ipa" "$APP_VERSION" "$APP_BUILD" "$URL" "$NOTES"
+          gh release upload altstore-source source.json --repo "$GITHUB_REPOSITORY" --clobber
       - name: Save native prerequisite progress
         if: always() && !cancelled() && steps.native-cache.outputs.cache-primary-key != ''
         uses: actions/cache/save@v6.1.0
