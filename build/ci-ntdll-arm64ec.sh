@@ -57,4 +57,6 @@ grep -aq '\[ldr-order\]' "$DLL" ||
     { echo "error: $DLL does not carry the [ldr-order] marker" >&2; exit 1; }
 grep -aq 'unnamed image view with execute access' "$DLL" ||
     { echo "error: $DLL does not carry the [map-notify] unnamed-image marker" >&2; exit 1; }
+grep -aq 'veh-bp\] breakpoint at' "$DLL" ||
+    { echo "error: $DLL does not carry the [veh-bp] marker of 0003-veh-breakpoint-log.patch" >&2; exit 1; }
 echo "ntdll.dll $(shasum -a 256 "$DLL" | cut -d' ' -f1)" | tee -a "$OUT"

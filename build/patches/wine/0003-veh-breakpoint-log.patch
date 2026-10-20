@@ -1,0 +1,50 @@
+diff --git a/dlls/ntdll/exception.c b/dlls/ntdll/exception.c
+index e90eb01..9b0fba4 100644
+--- a/dlls/ntdll/exception.c
++++ b/dlls/ntdll/exception.c
+@@ -113,6 +113,15 @@ static VECTORED_HANDLER *add_vectored_handler( LIST_ENTRY *handler_list, ULONG f
+         else InsertTailList( handler_list, &handler->entry );
+         RtlLeaveCriticalSection( &vectored_handlers_section );
+     }
++#ifdef __arm64ec__
++    {   /* madeira-bcd [veh-add]: which handlers a program registers (Black Ops III's
++         * anti-tamper raises int3 in its own code and expects a handler for them) */
++        static LONG add_n;
++        if (InterlockedIncrement( &add_n ) <= 32)
++            ERR( "[veh-add] %s handler %p first=%lu\n",
++                 handler_list == &vectored_exception_handlers ? "exception" : "continue", func, first );
++    }
++#endif
+     return handler;
+ }
+ 
+@@ -161,6 +170,14 @@ static LONG call_vectored_handlers( EXCEPTION_RECORD *rec, CONTEXT *context )
+ 
+     mark = &vectored_exception_handlers;
+     entry = mark->Flink;
++#ifdef __arm64ec__
++    if (rec->ExceptionCode == STATUS_BREAKPOINT && entry == mark)
++    {   /* madeira-bcd [veh-bp]: a breakpoint with no vectored handler to take it */
++        static LONG none_n;
++        if (InterlockedIncrement( &none_n ) <= 16)
++            ERR( "[veh-bp] breakpoint at %p: no vectored exception handler registered\n", rec->ExceptionAddress );
++    }
++#endif
+     while (entry != mark)
+     {
+         handler = CONTAINING_RECORD( entry, VECTORED_HANDLER, entry );
+@@ -209,6 +226,14 @@ static LONG call_vectored_handlers( EXCEPTION_RECORD *rec, CONTEXT *context )
+ #endif
+         ret = func( &except_ptrs );
+ #ifdef __arm64ec__
++        if (rec->ExceptionCode == STATUS_BREAKPOINT)
++        {   /* madeira-bcd [veh-bp]: each vectored handler's answer to a breakpoint */
++            static LONG bp_n;
++            if (InterlockedIncrement( &bp_n ) <= 48)
++                ERR( "[veh-bp] breakpoint at %p: handler %p returned %x, Rip %p -> %p\n",
++                     rec->ExceptionAddress, func, (unsigned int)ret,
++                     (void *)(ULONG_PTR)veh_saved.Rip, (void *)(ULONG_PTR)context->Rip );
++        }
+         if (rec->ExceptionCode == STATUS_ACCESS_VIOLATION)
+         {
+             static LONG vehr_n;
