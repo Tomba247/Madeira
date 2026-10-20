@@ -48,3 +48,58 @@ index e90eb01..9b0fba4 100644
          if (rec->ExceptionCode == STATUS_ACCESS_VIOLATION)
          {
              static LONG vehr_n;
+diff --git a/dlls/ntdll/signal_arm64ec.c b/dlls/ntdll/signal_arm64ec.c
+index e92f5b7..f9d18e4 100644
+--- a/dlls/ntdll/signal_arm64ec.c
++++ b/dlls/ntdll/signal_arm64ec.c
+@@ -3154,6 +3154,16 @@ NTSTATUS call_seh_handlers( EXCEPTION_RECORD *rec, CONTEXT *orig_context )
+     for (;;)
+     {
+         status = virtual_unwind( UNW_FLAG_EHANDLER, &dispatch, &context );
++        if (rec && rec->ExceptionCode == STATUS_BREAKPOINT)
++        {   /* madeira-bcd [seh-bp]: each frame a breakpoint's handler search visits */
++            static LONG bpf_n;
++            if (InterlockedIncrement( &bpf_n ) <= 96)
++                ERR( "[seh-bp] bp %p: frame pc=%p ec=%d entry=%p base=%p handler=%p establisher=%p status=%x\n",
++                     rec->ExceptionAddress, (void *)(ULONG_PTR)dispatch.ControlPc,
++                     (int)RtlIsEcCode( dispatch.ControlPc ), dispatch.FunctionEntry,
++                     (void *)(ULONG_PTR)dispatch.ImageBase, dispatch.LanguageHandler,
++                     (void *)(ULONG_PTR)dispatch.EstablisherFrame, (unsigned int)status );
++        }
+         if (status != STATUS_SUCCESS) return status;
+ 
+     unwind_done:
+diff --git a/dlls/ntdll/unwind.c b/dlls/ntdll/unwind.c
+index f55ca6a..435ac5e 100644
+--- a/dlls/ntdll/unwind.c
++++ b/dlls/ntdll/unwind.c
+@@ -141,6 +141,14 @@ BOOLEAN CDECL RtlInstallFunctionTableCallback( ULONG_PTR table, ULONG_PTR base,
+     RtlEnterCriticalSection( &dynamic_unwind_section );
+     list_add_tail( &dynamic_unwind_list, &entry->entry );
+     RtlLeaveCriticalSection( &dynamic_unwind_section );
++#ifdef __arm64ec__
++    {   /* madeira-bcd [fn-table]: unwind data a program registers for code it made */
++        static LONG cb_n;
++        if (InterlockedIncrement( &cb_n ) <= 32)
++            ERR( "[fn-table] callback %p for %p..%p (context %p)\n", callback, (void *)base,
++                 (void *)(base + length), context );
++    }
++#endif
+ 
+     return TRUE;
+ }
+@@ -171,6 +179,14 @@ NTSTATUS WINAPI RtlAddGrowableFunctionTable( void **table, RUNTIME_FUNCTION *fun
+     RtlEnterCriticalSection( &dynamic_unwind_section );
+     list_add_tail( &dynamic_unwind_list, &entry->entry );
+     RtlLeaveCriticalSection( &dynamic_unwind_section );
++#ifdef __arm64ec__
++    {   /* madeira-bcd [fn-table]: unwind data a program registers for code it made */
++        static LONG tab_n;
++        if (InterlockedIncrement( &tab_n ) <= 32)
++            ERR( "[fn-table] table %p: %lu function(s) for %p..%p (ec=%d)\n", functions, count,
++                 (void *)base, (void *)end, (int)RtlIsEcCode( base ) );
++    }
++#endif
+ 
+     *table = entry;
+ 
