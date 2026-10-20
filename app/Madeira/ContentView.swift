@@ -3358,6 +3358,15 @@ struct ContentView: View {
     /// `profile` is a Steam game's library entry (its Game details page): the
     /// session then takes that entry's display, performance and on-screen settings.
     private func startDock(_ game: DockGame, compactPool: Bool, profile: LibraryEntry? = nil) {
+        // Madeira Dock's own games list starts without a profile; a game the library has
+        // still takes its Game details settings and config lines (BCDLaunch.applyLibrary),
+        // as Play does, so the start a game takes never decides which fixes it runs with.
+        if profile == nil, let entry = library.entries.first(where: { $0.steamAppID == game.id }) {
+            LogStore.shared.log("[madeira-dock] app=\(game.id) started from Dock's list: using the library entry's settings")
+            BCDLaunch.applyLibrary(entry)
+            startDock(game, compactPool: compactPool, profile: entry)
+            return
+        }
         let inLibrary = library.enabled
         guard jitReadyForLaunch(inLibrary: inLibrary, entry: profile?.id,
                                 then: { startDock(game, compactPool: compactPool, profile: profile) }) else { return }
