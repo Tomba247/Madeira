@@ -123,8 +123,13 @@ enum GameRecommendations {
     /// Social Club's threads waited on its lock; with classic, three in 17 minutes
     /// and no memory kill. And RDR2's own -cpuLoadRebalancing
     /// -disableSchedulingContentionReduction, which a Steam launch cannot pass.
+    /// Version 12 (2026-10-21): rp-carry. A render pass open at the end of a
+    /// command list stays open into the next list that draws to the same
+    /// targets: ~247 MB a frame no longer stored and reloaded, loads 448 -> 368
+    /// MB and stores 496 -> 418 MB a frame in GPU-bound scenes, 23 -> 26 fps
+    /// there, and nothing wrong on screen in the owner's session.
     static let rdr2Steam = GameRecommendation(
-        id: "rdr2-steam", title: "Red Dead Redemption 2 (Steam)", version: 11,
+        id: "rdr2-steam", title: "Red Dead Redemption 2 (Steam)", version: 12,
         config: """
         # Madeira's recommended settings for Red Dead Redemption 2 (Steam).
         # Reset to Recommended, at the bottom of the game's settings, brings them back.
@@ -146,6 +151,7 @@ enum GameRecommendations {
         avail-phys = 1
         indirect-fast = 1
         ind-probe = 0
+        rp-carry = 1
         fullscreen-window = 1
         env.WINE_D3D_CONFIG = renderer=no3d
         env.FEX_VECTORTSOENABLED = 0
@@ -197,7 +203,7 @@ enum GameRecommendations {
     /// that keep that session alive), plus the line GTA V Enhanced's list outside
     /// Steam starts with: the [ec-hook] reporter off.
     static let rdr2Other = GameRecommendation(
-        id: "rdr2-other", title: "Red Dead Redemption 2 (outside Steam)", version: 2,
+        id: "rdr2-other", title: "Red Dead Redemption 2 (outside Steam)", version: 3,
         config: """
         # Madeira's recommended settings for Red Dead Redemption 2 outside Steam (Rockstar Games Launcher or another store).
         # Reset to Recommended, at the bottom of the game's settings, brings them back.
@@ -219,6 +225,7 @@ enum GameRecommendations {
         avail-phys = 1
         indirect-fast = 1
         ind-probe = 0
+        rp-carry = 1
         fullscreen-window = 1
         env.WINE_D3D_CONFIG = renderer=no3d
         env.FEX_VECTORTSOENABLED = 0
