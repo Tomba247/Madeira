@@ -90,6 +90,8 @@ grep -aq '\[perf\] indirect split per frame' "$DLL" ||
     { echo "error: $DLL does not carry the [perf] indirect split line" >&2; exit 1; }
 grep -aq '\[perf\] draw steps, us per draw' "$DLL" ||
     { echo "error: $DLL does not carry the [perf] draw steps line" >&2; exit 1; }
+grep -aq '\[perf\] table-reuse per frame' "$DLL" ||
+    { echo "error: $DLL does not carry the [perf] table-reuse line" >&2; exit 1; }
 echo "  built $(wc -c < "$DLL" | tr -d ' ') bytes (shipped: $(wc -c < "$APP/d3d12.dll" | tr -d ' '))"
 cp "$DLL" "$APP/d3d12.dll"
 cp "$DLL" "$APP/madeira_d3d12.dll"
