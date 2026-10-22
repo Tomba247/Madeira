@@ -17,6 +17,19 @@ OUT_LIB="$BUILD_DIR/libdxmt_unix.a"
 
 mkdir -p "$OBJ_DIR"
 
+# madeira-bcd: build/patches/dxmt/*.patch on the pinned DXMT, in name order
+# (`git apply`; one that does not apply fails the build). A patch already in the
+# tree (a re-run) is left as it is.
+for p in "$REPO_ROOT"/build/patches/dxmt/*.patch; do
+    [ -e "$p" ] || continue
+    if git -C "$DXMT_ROOT" apply --reverse --check "$p" 2>/dev/null; then
+        echo "dxmt patch already applied: $(basename "$p")"
+    else
+        git -C "$DXMT_ROOT" apply "$p"
+        echo "dxmt patch applied: $(basename "$p")"
+    fi
+done
+
 COMMON_FLAGS="-arch arm64 -isysroot $SDK -miphoneos-version-min=18.0 -fblocks -O2"
 INCLUDES="-I$DXMT_ROOT/include -I$DXMT_ROOT/libs -I$DXMT_SRC/winemetal -I$DXMT_SRC/airconv"
 INCLUDES_DIRECTX="-I$DXMT_ROOT/include/native/directx -I$DXMT_ROOT/include/native/windows"

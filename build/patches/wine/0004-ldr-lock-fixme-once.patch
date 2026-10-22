@@ -1,0 +1,20 @@
+diff --git a/dlls/ntdll/loader.c b/dlls/ntdll/loader.c
+index 1422705..fee49cc 100644
+--- a/dlls/ntdll/loader.c
++++ b/dlls/ntdll/loader.c
+@@ -2434,7 +2434,14 @@ NTSTATUS WINAPI LdrUnregisterDllNotification( void *cookie )
+  */
+ NTSTATUS WINAPI LdrLockLoaderLock( ULONG flags, ULONG *result, ULONG_PTR *magic )
+ {
+-    if (flags & ~0x2) FIXME( "flags %lx not supported\n", flags );
++    /* madeira-bcd: once per process. Red Dead Redemption 2 takes the loader lock
++     * with flag 0x1 ~110 times a second, and a FIXME line each time was the
++     * biggest producer in its session log (40,000 lines in six minutes). */
++    if (flags & ~0x2)
++    {
++        static LONG warned;
++        if (!InterlockedExchange( &warned, 1 )) FIXME( "flags %lx not supported\n", flags );
++    }
+ 
+     if (result) *result = 0;
+     if (magic) *magic = 0;
