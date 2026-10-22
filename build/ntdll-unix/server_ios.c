@@ -1775,6 +1775,19 @@ static void ios_bg_game_note( uint32_t pid, uint32_t wtid )
     __atomic_store_n( &ios_bg_game_seen_ns, now, __ATOMIC_RELEASE );   /* publishes since and pid */
 }
 
+/* madeira-bcd framegen-d3d12: whether the calling thread belongs to the game, the
+ * process whose D3D12 runtime presents (noted above from the [xp] sampler). DXMT's
+ * frame generation (MADEIRA_FRAMEGEN) serves that process only: the Rockstar
+ * Games Launcher's and Social Club's windows presented through the same global
+ * interpolator from other threads, re-sized it under each other and Metal
+ * aborted on a copy between textures of different sizes (2026-10-22, 17:10). */
+int ios_framegen_game_thread( void )
+{
+    uint32_t pid = __atomic_load_n( &ios_bg_game_pid, __ATOMIC_ACQUIRE );
+    TEB *teb = NtCurrentTeb();
+    return pid && teb && HandleToULong( teb->ClientId.UniqueProcess ) == pid;
+}
+
 static void ios_bg_qos_init( void )
 {
     /* ';'-separated exe names demoted to utility QoS while the game presents; empty = off */

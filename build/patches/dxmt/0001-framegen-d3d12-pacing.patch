@@ -1,5 +1,5 @@
 diff --git a/src/winemetal/unix/winemetal_unix.c b/src/winemetal/unix/winemetal_unix.c
-index 3f7974e..76ead7f 100644
+index 3f7974e..1728d48 100644
 --- a/src/winemetal/unix/winemetal_unix.c
 +++ b/src/winemetal/unix/winemetal_unix.c
 @@ -3384,7 +3384,12 @@ static int madeira_fg_present_inner(id<MTLCommandBuffer> cb, id<CAMetalDrawable>
@@ -16,7 +16,7 @@ index 3f7974e..76ead7f 100644
      g_fg.dt = g_fg.dt > 0 ? g_fg.dt * 0.8 + d * 0.2 : d;
    }
    g_fg.last_abs = now;
-@@ -3463,17 +3468,55 @@ static int madeira_fg_present_inner(id<MTLCommandBuffer> cb, id<CAMetalDrawable>
+@@ -3463,17 +3468,60 @@ static int madeira_fg_present_inner(id<MTLCommandBuffer> cb, id<CAMetalDrawable>
      [blit copyFromTexture:g_fg.out toTexture:extra.texture];
      [blit endEncoding];
    }
@@ -45,17 +45,22 @@ index 3f7974e..76ead7f 100644
    return 1;
  }
 +/* madeira-bcd framegen-d3d12: every Wine process of a session presents through
-+ * this one process, and the interpolator's state is one global: a second layer
-+ * (the Rockstar Games Launcher's hidden Chromium window keeps presenting at
-+ * MADEIRA_HIDDEN_LAYER_FPS for the whole game) re-created the interpolator at
-+ * every switch and raced the game's encode thread. Hidden windows' layers
-+ * (Winios' -madeiraWindowHidden) present as usual; the visible layer that last
-+ * presented owns the interpolator, and a change of owner starts a new history. */
++ * this one process, and the interpolator's state is one global. The Rockstar
++ * Games Launcher (1280x600) and Social Club (700x800) windows presented through
++ * it from their own threads, each re-sizing it under the other, until Metal
++ * aborted on a copy between textures of different sizes (2026-10-22, 17:10).
++ * Only the game's threads use it now (ios_framegen_game_thread: the process
++ * whose D3D12 runtime presents, from the [xp] sampler; nothing before it is
++ * known), never a hidden window's layer (Winios' -madeiraWindowHidden), and
++ * one at a time; a change of layer starts a new history. */
++extern int ios_framegen_game_thread(void);
 +static os_unfair_lock g_fg_lock = OS_UNFAIR_LOCK_INIT;
 +static void *g_fg_owner;
  static int madeira_fg_present(id<MTLCommandBuffer> cb, id<CAMetalDrawable> drawable) {
    int r;
 +  CALayer *layer = drawable.layer;
++  if (!ios_framegen_game_thread())
++    return 0;
 +  if (layer && [layer respondsToSelector:@selector(madeiraWindowHidden)] &&
 +      ((BOOL (*)(id, SEL))objc_msgSend)(layer, @selector(madeiraWindowHidden)))
 +    return 0;
