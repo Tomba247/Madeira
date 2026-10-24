@@ -260,7 +260,7 @@ jobs:
       # newest entry of the source at releases/download/altstore-source/source.json.
       # A failure here leaves the build and its artifact as they are.
       - name: Publish the test build to the SideStore / AltStore source
-        if: github.ref == 'refs/heads/bo3-build' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/bo3-build' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         continue-on-error: true
         shell: bash
         env:
