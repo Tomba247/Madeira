@@ -59,4 +59,8 @@ grep -aq 'unnamed image view with execute access' "$DLL" ||
     { echo "error: $DLL does not carry the [map-notify] unnamed-image marker" >&2; exit 1; }
 grep -aq 'veh-bp\] breakpoint at' "$DLL" ||
     { echo "error: $DLL does not carry the [veh-bp] marker of 0003-veh-breakpoint-log.patch" >&2; exit 1; }
+grep -aq '\[cs-x64\] v1 not installed' "$DLL" ||
+    { echo "error: $DLL does not carry the [cs-x64] marker of 0005-cs-tls-x64-fastpath.patch" >&2; exit 1; }
+grep -aq '\[sync-lean\]' "$DLL" ||
+    { echo "error: $DLL does not carry the [sync-lean] marker of 0006-sync-lean.patch" >&2; exit 1; }
 echo "ntdll.dll $(shasum -a 256 "$DLL" | cut -d' ' -f1)" | tee -a "$OUT"

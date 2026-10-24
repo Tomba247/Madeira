@@ -26,6 +26,9 @@ build reproduces the prebuilt's `.text` byte for byte):
 
 | `wine/0004-ldr-lock-fixme-once.patch` | `wine` | `LdrLockLoaderLock` warns about its unsupported flag 0x1 once per process instead of on every call: Red Dead Redemption 2 takes the loader lock that way ~110 times a second (40,000 log lines in six minutes). |
 
+| `wine/0005-cs-tls-x64-fastpath.patch` | `wine` | willfaust/wine#50, unchanged: `MADEIRA_CS_X64=1` / `MADEIRA_TLS_X64=1` (off by default) run the uncontended critical-section and `TlsGetValue` paths in x64 inside the JIT code instead of leaving it for the ARM64EC export each call. Red Dead Redemption 2 makes ~850,000 x64-to-EC calls a second. |
+| `wine/0006-sync-lean.patch` | `wine` | willfaust/wine#51, unchanged: `MADEIRA_SYNC_LEAN=1` (off by default) drops the SRW history ring and the WaitOnAddress counters (diagnostic interlocked increments on shared cache lines). |
+
 `build/dxmt-ios/build.sh` applies `build/patches/dxmt/*.patch` to the pinned DXMT before it
 compiles winemetal's unix side (a patch already in the tree is left alone):
 
